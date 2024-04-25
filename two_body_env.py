@@ -1,78 +1,54 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.integrate import ode
+from scipy.integrate import solve_ivp
 from mpl_toolkits.mplot3d import Axes3D
 
-class TwoBodyEnv:
-    # https://www.youtube.com/watch?v=7JY44m6eemo
+# Constants for the Moon
+moon_radius = 1737.1  # km
+moon_mu = 4902.8  # km^3/s^2
+distance_earth_moon = 384400.0  # km
+earth_mu = 398600.0  # km^3/s^2
 
-    def __init__(self):
-        self.earth_radius = 6371.0  # km
-        self.earth_mu = 398600.0  # km^3/s^2
+# Calculate the Sphere of Influence (SOI) for the Moon
+r_SOI_moon = distance_earth_moon * (moon_mu / earth_mu)**(2/5)
 
-        # initial conditions for orbit parameters
-        r_mag = self.earth_radius + 500.0  # km
-        v_mag = np.sqrt(self.earth_mu / r_mag)  # km/s
+# Define the differential equation with SOI
+def diff_q(t, y, earth_mu, moon_mu, distance_earth_moon, r_SOI_moon):
+    # unpack the state vector
+    rx, ry, rz, vx, vy, vz = y
+    r_earth = np.array([rx, ry, rz])
+    r_moon = np.array([rx - distance_earth_moon, ry, rz])  # Assuming Moon is along the x-axis at this distance
+    r_earth_norm = np.linalg.norm(r_earth)
+    r_moon_norm = np.linalg.norm(r_moon)
 
-        # initial position and velocity vectors
-        r0 = np.array([r_mag, 0.0, 0.0])
-        v0 = np.array([0.0, v_mag, 0.0])
+    if r_moon_norm < r_SOI_moon:
+        # Moon's gravity dominates
+        ax, ay, az = -moon_mu * r_moon / r_moon_norm**3
+    else:
+        # Earth's gravity dominates
+        ax, ay, az = -earth_mu * r_earth / r_earth_norm**3
 
-        # time span
-        self.tspan = 100 * 60.0  # seconds
-        self.dt = 60.0  # seconds
+    return [vx, vy, vz, ax, ay, az]
 
-        # number of steps
-        self.n_steps = int(np.ceil(self.tspan / self.dt))
+# Initial conditions remain the same as your previous example
 
-        # initialize arrays to store the state vector
-        self.ys = np.zeros((self.n_steps, 6))
-        self.ts = np.zeros((self.n_steps, 1))
+# Solve the ODE using the updated function with the SOI logic
+sol = solve_ivp(fun=diff_q, t_span=t_span, y0=y0, 
+                args=(earth_mu, moon_mu, distance_earth_moon, r_SOI_moon), 
+                method='RK45', rtol=1e-6, atol=1e-9)
 
-        # initial conditions
-        y0 = r0 + v0
-        self.ys[0] = np.array(y0)
-        self.step = 1
-
-    def diff_q(t,y,mu):
-        # unpack the state vector
-        rx, ry, rz, vx, vy, vz = y
-        r = np.array([rx, ry, rz])
-        #norm of the radius vector
-        r_norm = np.linalg.norm(r)
-        # compute the 2 body acceleration
-        ax, ay, az = -mu * r / r_norm**3
-        # return the derivative of the state
-        return [vx, vy, vz, ax, ay, az]
-    
-    def orbit_propogation(self):
-        # initialize the solver
-        self.solver = ode(self.diff_q)
-        self.solver.set_integrator('rk4')
-        self.solver.set_initial_value(self.ys[0], 0.0)
-        self.solver.set_f_params(self.earth_mu) # set the mu parameter for the diff_q function
-
-        # propogate the orbit
-        while self.solver.successful() and self.step < self.n_steps:
-            self.solver.integrate(self.solver.t + self.dt)
-            self.ts[self.step] = self.solver.t
-            self.ys[self.step] = self.solver.y
-            self.step += 1
-        rs = self.ys[:, 0:3] # position vector
-        # plot(rs) below in plot function
-
-    def plot(self):
-        rs = self.ys[:, 0:3]
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.plot(rs[:, 0], rs[:, 1], rs[:, 2])
-        ax.set_xlabel('X [km]')
-        ax.set_ylabel('Y [km]')
-        ax.set_zlabel('Z [km]')
-        plt.show()
-
-    
+# Extract the solution
+rs = sol.y[:3].T  # Position vector history
 
 
+def plot_orbit(rs):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(rs[:, 0], rs[:, 1], rs[:, 2])
+    ax.set_xlabel('X [km]')
+    ax.set_ylabel('Y [km]')
+    ax.set_zlabel('Z [km]')
+    plt.show()
 
-
+# Plot the results
+plot_orbit(rs)
