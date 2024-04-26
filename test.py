@@ -4,7 +4,7 @@ x = torch.rand(5, 3)
 print(x)
 
 # testing PPO algorithm
-from ray.rllib.algorithms.ppo import PPOConfig
+# from ray.rllib.algorithms.ppo import PPOConfig
 
 # config = (  # 1. Configure the algorithm,
 #     PPOConfig()
@@ -22,19 +22,19 @@ from ray.rllib.algorithms.ppo import PPOConfig
 
 # algo.evaluate()  # 4. and evaluate it.
 
-import gym 
-# import gym_box2D
-env = gym.make("LunarLander-v2", render_mode="human")
-observation, info = env.reset()
+# import gym 
+# # import gym_box2D
+# env = gym.make("LunarLander-v2", render_mode="human")
+# observation, info = env.reset()
 
-for _ in range(1000):
-    action = env.action_space.sample()  # agent policy that uses the observation and info
-    observation, reward, terminated, truncated, info = env.step(action)
+# for _ in range(1000):
+#     action = env.action_space.sample()  # agent policy that uses the observation and info
+#     observation, reward, terminated, truncated, info = env.step(action)
 
-    if terminated or truncated:
-        observation, info = env.reset()
+#     if terminated or truncated:
+#         observation, info = env.reset()
 
-env.close()
+# env.close()
 
 # import gym
 # env = gym.make("CarRacing-v2")

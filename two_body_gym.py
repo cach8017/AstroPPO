@@ -9,8 +9,11 @@ from gym import Env, spaces
 class SpacecraftEnv(Env):
     def __init__(self):
         super().__init__()
-        self.action_space = spaces.Box(low=-.1, high=.1, shape=(3,), dtype=np.float32)  # Define thrust direction and magnitude
+        # self.action_space = spaces.Box(low=-.1, high=.1, shape=(3,), dtype=np.float32)  # Define thrust direction and magnitude
         # 3 actions, each in the range [-1, 1], pith, yaw and magnitude
+        # self.action_space = spaces.Tuple(spaces.MultiBinary(1),spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32))   # Define thrust direction and magnitude
+        self.action_space = spaces.MultiBinary(2)   # Define thrust direction and magnitude
+
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32)  # Position (rx, ry, rz), velocity(vx,vy,vz), mass(m)
 
         # Initialize the 3D plot for the orbit
@@ -25,13 +28,29 @@ class SpacecraftEnv(Env):
 
     def step(self, action):
         # Apply the action to simulate the thrust maneuver
-        thrust_direction = action[:2]  # Assume action defines direction in some coordinate frame
-        thrust_magnitude = action[2]  # Last component is the magnitude of the thrust
-        delta_v = np.array([*thrust_direction, 0]) * thrust_magnitude * 100  # Scale thrust for visibility
+        #thrust_direction = action[2]  # Assume action defines direction in some coordinate frame
+        # if action[1] == 1 :
+        #     thrust_magnitude = 1
+        # else:
+        #     thrust_magnitude = -1
+        thrust_magnitude = 1 if action[1] == 1 else -1
+        if action[0] == 1: thrust_magnitude = -thrust_magnitude
+        # thrust_magnitude = action[2]  # Last component is the magnitude of the thrust
+        #delta_v = np.array([*thrust_direction, 0]) * thrust_magnitude * 100  # Scale thrust for visibility
+        unit_v = (self.state[3:6] / np.linalg.norm(self.state[3:6]) ) * thrust_magnitude  
 
         # Perform the maneuver
-        maneuver = Maneuver.impulse(delta_v * u.km / u.s)
         orbit = Orbit.from_vectors(Earth, self.state[:3] * u.km, self.state[3:6] * u.km / u.s)
+        HalfPeriod = orbit.period.to(u.s)/2 
+        dv = unit_v << (u.km / u.s)
+        if action[0] == 0:
+            maneuver = Maneuver.impulse(dv)
+        else:
+            # maneuver = Maneuver.impulse((HalfPeriod << u.s, dv ))
+            orbit = orbit.propagate(HalfPeriod)
+            maneuver = Maneuver.impulse(dv)
+
+
         new_orbit = orbit.apply_maneuver(maneuver)
 
         # Update the state
@@ -41,7 +60,7 @@ class SpacecraftEnv(Env):
         self.add_trajectory(new_orbit)
 
         # Calculate reward and check completion
-        reward = -np.abs(delta_v).sum()  # Penalize large maneuvers
+        reward = -np.abs(thrust_magnitude).sum()  # Penalize large maneuvers
         done = False  # Add appropriate conditions for task completion
 
         return self.state, reward, done, {}
@@ -67,8 +86,13 @@ class SpacecraftEnv(Env):
 
 # Example usage
 env = SpacecraftEnv()
-for _ in range(10):
-    state, reward, done, _ = env.step(np.random.random(3)/5 - 0.1)  # Example random action
+a = [[0,1],
+     [1,1], 
+     [1,1],
+     [0,1]]
+for i in range(len(a)):
+    print(a[i])
+    state, reward, done, i = env.step(a[i])  # Example random action
 env.render()
 
 
