@@ -1,13 +1,16 @@
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 import plotly.graph_objects as go
 from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
 from poliastro.maneuver import Maneuver
 from astropy import units as u
-from gym import Env, spaces
+from astropy.units import Quantity
 
-class SpacecraftEnv(Env):
-    def __init__(self):
+
+class BaseSpacecraftEnv(gym.Env):
+    def __init__(self, env_config=None):
         super().__init__()
         # self.action_space = spaces.Box(low=-.1, high=.1, shape=(3,), dtype=np.float32)  # Define thrust direction and magnitude
         # 3 actions, each in the range [-1, 1], pith, yaw and magnitude
@@ -48,8 +51,9 @@ class SpacecraftEnv(Env):
         unit_v = (self.state[3:6] / np.linalg.norm(self.state[3:6]) ) * thrust_magnitude * 0.25 # Apply thrust in the direction of the current velocity vector
         # print(f"deltaV: {unit_v}")
 
-        # Perform the maneuver
-        orbit = Orbit.from_vectors(Earth, self.state[:3] * u.km, self.state[3:6] * u.km / u.s)
+        position = Quantity(self.state[:3], u.km)
+        velocity = Quantity(self.state[3:6], u.km / u.s)
+        orbit = Orbit.from_vectors(Earth, position, velocity)
         HalfPeriod = orbit.period.to(u.s)/2 
         dv = unit_v << (u.km / u.s)
         maneuver = Maneuver.impulse(dv)
@@ -65,16 +69,24 @@ class SpacecraftEnv(Env):
         reward = -np.abs(thrust_magnitude).sum()  # Penalize large maneuvers
         done = self.compare_orbits(new_orbit)  # Terminate if desired orbit is reached
         if done: reward += 1000 # Add reward for reaching desired orbit
-
-        return self.state, reward, done, {}
-
-    def reset(self):
-        # Reset the state to initial conditions
+        truncated = False  # This should be True if there is a time limit and it's reached
+        info = {}
+        return self.state, reward, done, truncated, info
+    
+    def reset(self, *, seed=None, options=None):
         initial_orbit = Orbit.circular(Earth, alt=300 * u.km)
+        # Assuming concatenate combines position and velocity correctly into a flat array
         self.state = np.concatenate([initial_orbit.r.to(u.km).value, initial_orbit.v.to(u.km / u.s).value])
-        self.add_trajectory(initial_orbit)
-        return self.state
 
+        # Debugging: Check the shape and type of self.state
+        print("State shape:", self.state.shape)
+        print("State type:", type(self.state))
+
+        # info = {}  # This should be a simple dictionary
+        return self.state#, info
+
+
+    
     def add_trajectory(self, orbit):
         # Sample points along orbit for plotting
         r = orbit.sample(values=100)
@@ -94,14 +106,20 @@ class SpacecraftEnv(Env):
 
 
 # Example usage
-env = SpacecraftEnv()
+env = BaseSpacecraftEnv()
 a = [[0,1], [1,1], [1,1], [0,1]]
 for i in range(20):
     # a = env.action_space.sample()
     # print(a)
     a = [1, 1] # always wait and positive deltaV
-    state, reward, done, _ = env.step(a)
-    if done: break
+    state, reward, done, truncated, _ = env.step(a)
+    print(f"Step {i}: State={state}, Reward={reward}, Done={done}, Truncated={truncated}")
+    if done: 
+        print("Episode finished!")
+        break
 env.render()
+
+
+
 
 
