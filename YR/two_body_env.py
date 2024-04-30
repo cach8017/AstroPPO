@@ -20,23 +20,23 @@ class TwoBodyEnv:
         v0 = np.array([0.0, v_mag, 0.0])
 
         # time span
-        self.tspan = 100 * 60.0  # seconds
+        # self.tspan = 100 * 60.0  # seconds
         self.dt = 60.0  # seconds
 
         # number of steps
-        self.n_steps = int(np.ceil(self.tspan / self.dt))
+        # self.n_steps = int(np.ceil(self.tspan / self.dt))
 
         # initialize arrays to store the state vector
-        self.ys = np.zeros((self.n_steps, 6))
-        self.ts = np.zeros((self.n_steps, 1))
+        self.ys = np.zeros((1, 6))
+        # self.ts = np.zeros((1, 1))
 
         # initial conditions
         x0 = np.concatenate((r0, v0))
         self.x = x0
-        self.ys[0] = np.array(x0)
-        self.step = 1
+        # self.ys[0] = np.array(x0)
+        # self.step = 1
 
-    def diff_q(self, t, y):
+    def diff_q(self, y):
         rx, ry, rz, vx, vy, vz = y
         r = np.array([rx, ry, rz])
         r_norm = np.linalg.norm(r)
@@ -44,9 +44,9 @@ class TwoBodyEnv:
         # return the derivative of the state
         return [vx, vy, vz, ax, ay, az]
 
-    def orbit_propogation(self):
+    def orbit_propogation(self, duration):
         # initialize the solver
-        sol = solve_ivp(self.diff_q, (0, self.tspan), self.x)
+        sol = solve_ivp(self.diff_q, (0, duration), self.x)
         self.x = sol.y[:, -1]
 
     def get_energy(self, state=False):
