@@ -107,17 +107,18 @@ class ActorCritic(nn.Module):
     def forward(self):
         raise NotImplementedError
 
-    def act(self, state):
+    def act(self, state, best=False):
 
         if self.has_continuous_action_space:
             action_mean = self.actor(state)
             cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
             dist = MultivariateNormal(action_mean, cov_mat)
+            action = action_mean if best else dist.sample()
         else:
             action_probs = self.actor(state)
             dist = Categorical(action_probs)
+            action = action_probs.argmax() if best else dist.sample()
 
-        action = dist.sample()
         action_logprob = dist.log_prob(action)
         state_val = self.critic(state)
 
@@ -201,7 +202,7 @@ class PPO:
 
         print("--------------------------------------------------------------------------------------------")
 
-    def select_action(self, state):
+    def select_action(self, state, best=False):
 
         if self.has_continuous_action_space:
             with torch.no_grad():
@@ -218,7 +219,7 @@ class PPO:
         else:
             with torch.no_grad():
                 state = torch.FloatTensor(state).to(device)
-                action, action_logprob, state_val = self.policy_old.act(state)
+                action, action_logprob, state_val = self.policy_old.act(state, best)
 
             self.buffer.states.append(state)
             self.buffer.actions.append(action)
@@ -577,7 +578,7 @@ def part3():
     # max_ep_len = 1000           # max timesteps in one episode
     # action_std = 0.1            # set same std for action distribution which was used while saving
 
-    total_test_episodes = 10  # total num of testing episodes
+    total_test_episodes = 1  # total num of testing episodes
 
     K_epochs = 80  # update policy for K epochs
     eps_clip = 0.2  # clip parameter for PPO
@@ -622,7 +623,7 @@ def part3():
         state = env.reset()
 
         for t in range(1, max_ep_len + 1):
-            action = ppo_agent.select_action(state)
+            action = ppo_agent.select_action(state, best=True)
             state, reward, done, _ = env.step(action)
             ep_reward += reward
 
@@ -636,6 +637,7 @@ def part3():
         print('Episode: {} \t\t Reward: {}'.format(ep, round(ep_reward, 2)))
         ep_reward = 0
 
+    env.render()
     env.close()
 
     print("============================================================================================")
@@ -770,5 +772,5 @@ def part4():
 
 
 # part2()
-# part3()
-part4()
+part3()
+# part4()
