@@ -1,5 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 from scipy.integrate import solve_ivp
 from gym import Env, spaces
 
@@ -73,20 +74,17 @@ class SpacecraftEnv(Env):
             return self.state, -100 - np.abs(thrust_magnitude).sum(), True, {}
         period = 2 * np.pi * np.sqrt(a ** 3 / self.earth_mu)
 
-        
         if action[0] != 0:  self.orbit_propogation(period*action[0])  # Wait 1.5 * T
 
-        unit_v = (self.state[3:6] / np.linalg.norm(self.state[3:6])) * thrust_magnitude * 0.5  # Apply thrust in the direction of the current velocity vector
+        unit_v = (self.state[3:6] / np.linalg.norm(self.state[3:6])) * thrust_magnitude * 0.5
 
         self.state[3:6] += unit_v
-        # print(f"state: {self.state}")
 
         # Calculate reward and check completion
+        reward = self.compare_orbits()  # Terminate if desired orbit is reached
+        done = reward == 1000
+        if done: print("goal reached")
         reward = -np.abs(thrust_magnitude).sum()  # Penalize large maneuvers
-        done = self.compare_orbits()  # Terminate if desired orbit is reached
-        if done:
-            reward += 1000
-            # self.add_trajectory()
         return self.state, reward, done, {}
 
     def reset(self):
@@ -105,7 +103,7 @@ class SpacecraftEnv(Env):
         a = -self.earth_mu / (2 * self.get_energy(state))
         return a
 
-    def add_trajectory(self, state=False):
+    def add_trajectory(self, state=False, params=dict()):
         # Plot one full orbit
         state = self.state if state is False else state
         a = self.get_semimajor_axis(state)
@@ -117,7 +115,9 @@ class SpacecraftEnv(Env):
         z = trajectory[2, :]
 
         # Add the trajectory segment to the plot
-        self.fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color='red')))
+        color = params.get('color', None)
+        label = params.get('label', None)
+        self.fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=color), name=label))
 
     def render(self, mode='human'):
         # Plot state history
@@ -125,9 +125,10 @@ class SpacecraftEnv(Env):
         y = self.x_hist[1, :]
         z = self.x_hist[2, :]
 
-        self.fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines'))
-        self.add_trajectory(self.initial_orbit)
-        self.add_trajectory(self.final_orbit)
+        self.add_trajectory(self.initial_orbit, params={"color": px.colors.qualitative.Plotly[2], "label": "Initial orbit"})
+        self.fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=px.colors.qualitative.Plotly[3]), name="Trajectory"))
+        self.add_trajectory(self.state, params={"color": "orange", "label": "Final orbit"})
+        self.add_trajectory(self.final_orbit, params={"color": "red", "label": "Desired orbit"})
         self.fig.show()
 
 
@@ -150,21 +151,45 @@ class SpacecraftEnv(Env):
             self.x_hist = np.concatenate((self.x_hist, sol.y), axis=1)
         return sol.y
 
+
+    def get_orbital_elements(self, state=False):
+        state = self.state if state is False else state
+        r = state[0:3]
+        v = state[3:6]
+        E = 0.5 * np.linalg.norm(v)**2 - self.earth_mu / np.linalg.norm(r)
+
+        a = -self.earth_mu / (2 * E)
+        h = np.cross(r, v)
+        e = np.sqrt(1 + (2*np.linalg.norm(h)**2*E)/(self.earth_mu**2))
+        i = np.arccos(h[2]/np.linalg.norm(h))
+
+        return a, e, i
+    
     def compare_orbits(self):
         # compare current and goal orbits
-        percent_diff = abs((self.get_energy(self.final_orbit) - self.get_energy()) / self.get_energy(self.final_orbit))
-        # print(f"Percent difference: {int(percent_diff * 100)}%")
-        return percent_diff < 0.1
+        # final - actual/final
+        aTrue, eTrue, iTrue = self.get_orbital_elements(self.final_orbit)
+        a, e, i = self.get_orbital_elements()
+        # print(f"aTrue = {aTrue}\neTrue = {eTrue}\niTrue = {iTrue}")
+        # print(f"a = {a}\ne = {e}\ni = {i}")
+
+        aDiff = abs(aTrue - a)/aTrue
+        eDiff = abs(eTrue - e) #/max(0.1,eTrue)
+        iDiff = abs(iTrue - i)/max(0.01,iTrue)
+
+        # print(f"aDiff: {aDiff}\neDiff: {eDiff}\niDiff: {iDiff}")
+        aMatch = (aDiff < 0.1)
+        eMatch = (eDiff < 0.3) 
+        reward = (aMatch + eMatch)*500
+        # result = (aDiff < 0.1) and (eDiff < 0.1) #and (iDiff < 0.1)
+        return reward
 
 
 # Example usage
 if __name__ == "__main__":
     env = SpacecraftEnv()
-    # a = [[0, 1], [1, 1], [1, 1], [0, 1]]
     for i in range(50):
-        # a = [1, 1]  # always wait and positive deltaV
         a = env.action_space.sample()
-        print(a)
         state, reward, done, _ = env.step(a)
         if done: break
     env.render()

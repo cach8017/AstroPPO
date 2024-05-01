@@ -698,6 +698,7 @@ def part4():
     all_runs = []
 
     for run_num in range(num_runs):
+        if run_num < num_runs - 1: continue # comment out to plot all runs in PPO_logs/
         log_f_name = log_dir + '/PPO_' + env_name + "_log_" + str(run_num) + ".csv"
         print("loading data from : " + log_f_name)
         data = pd.read_csv(log_f_name)
@@ -772,5 +773,5 @@ def part4():
 
 
 # part2()
-part3()
-# part4()
+# part3()
+part4()

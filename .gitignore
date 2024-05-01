@@ -1,2 +1,6 @@
 .idea
 venv
+__pycache__
+PPO_figs
+PPO_logs
+PPO_preTrained
