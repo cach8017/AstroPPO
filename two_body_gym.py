@@ -34,9 +34,14 @@ class SpacecraftEnv(Env):
                 action_pairs.append([wait_action, thrust_action])
 
         self.action_map = {index: action_pair for index, action_pair in enumerate(action_pairs)}
-        
         self.action_space = spaces.Discrete(len(action_pairs)) 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32)  # Position (rx, ry, rz), velocity(vx,vy,vz)
+
+
+
+        # self.action_space = spaces.Discrete(4)  # Define thrust direction and magnitude
+        # self.action_map = {0: [0, 0], 1: [0, 1], 2: [1, 0], 3: [1, 1]}
+        # self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32)  # Position (rx, ry, rz), velocity(vx,vy,vz), mass(m)
 
         # Initialize the 3D plot for the orbit
         self.fig = go.FigureWidget()
@@ -57,17 +62,19 @@ class SpacecraftEnv(Env):
         self.state = self.reset()
         # self.add_trajectory(self.final_orbit)
 
+       
     def step(self, a_ind):
         # Apply the action to simulate the thrust maneuver
-        action = self.action_map[a_ind] # pair <wait, thrust_direction>
-        thrust_magnitude = action[1] # Select positive or negative deltaV burn
+        action = self.action_map[a_ind] # later on - sample the action index to get the action pair
+        thrust_magnitude = action[1] # Thrust magnitude
 
         a = self.get_semimajor_axis()
         if a < 0:
             return self.state, -100 - np.abs(thrust_magnitude).sum(), True, {}
         period = 2 * np.pi * np.sqrt(a ** 3 / self.earth_mu)
 
-        if action[0]:  self.orbit_propogation(action[0] * period)  # Wait 1.5 * T
+        
+        if action[0] != 0:  self.orbit_propogation(period*action[0])  # Wait 1.5 * T
 
         unit_v = (self.state[3:6] / np.linalg.norm(self.state[3:6])) * thrust_magnitude * 0.5  # Apply thrust in the direction of the current velocity vector
 
@@ -119,7 +126,10 @@ class SpacecraftEnv(Env):
         z = self.x_hist[2, :]
 
         self.fig.add_trace(go.Scatter3d(x=x, y=y, z=z, mode='lines'))
+        self.add_trajectory(self.initial_orbit)
+        self.add_trajectory(self.final_orbit)
         self.fig.show()
+
 
     def diff_q(self, t, y):
         # ODEs
@@ -150,9 +160,9 @@ class SpacecraftEnv(Env):
 # Example usage
 if __name__ == "__main__":
     env = SpacecraftEnv()
-    a = [[0, 1], [1, 1], [1, 1], [0, 1]]
-    for i in range(100):
-        a = [1, 1]  # always wait and positive deltaV
+    # a = [[0, 1], [1, 1], [1, 1], [0, 1]]
+    for i in range(50):
+        # a = [1, 1]  # always wait and positive deltaV
         a = env.action_space.sample()
         print(a)
         state, reward, done, _ = env.step(a)
