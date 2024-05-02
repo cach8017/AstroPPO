@@ -107,18 +107,17 @@ class ActorCritic(nn.Module):
     def forward(self):
         raise NotImplementedError
 
-    def act(self, state, best=False):
+    def act(self, state):
 
         if self.has_continuous_action_space:
             action_mean = self.actor(state)
             cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
             dist = MultivariateNormal(action_mean, cov_mat)
-            action = action_mean if best else dist.sample()
         else:
             action_probs = self.actor(state)
             dist = Categorical(action_probs)
-            action = action_probs.argmax() if best else dist.sample()
 
+        action = dist.sample()
         action_logprob = dist.log_prob(action)
         state_val = self.critic(state)
 
@@ -202,7 +201,7 @@ class PPO:
 
         print("--------------------------------------------------------------------------------------------")
 
-    def select_action(self, state, best=False):
+    def select_action(self, state):
 
         if self.has_continuous_action_space:
             with torch.no_grad():
@@ -219,7 +218,7 @@ class PPO:
         else:
             with torch.no_grad():
                 state = torch.FloatTensor(state).to(device)
-                action, action_logprob, state_val = self.policy_old.act(state, best)
+                action, action_logprob, state_val = self.policy_old.act(state)
 
             self.buffer.states.append(state)
             self.buffer.actions.append(action)
@@ -467,17 +466,21 @@ def part2():
     time_step = 0
     i_episode = 0
 
+    best_action_sequence = []
+    best_reward = 0
+
     # training loop
     while time_step <= max_training_timesteps:
 
         state = env.reset()
         current_ep_reward = 0
-
+        actions = []
         for t in range(1, max_ep_len + 1):
 
             # select action with policy
             action = ppo_agent.select_action(state)
             state, reward, done, _ = env.step(action)
+            actions.append(action)
 
             # saving reward and is_terminals
             ppo_agent.buffer.rewards.append(reward)
@@ -530,11 +533,15 @@ def part2():
             if done:
                 break
 
+        if current_ep_reward > best_reward:
+            best_action_sequence = actions
+            best_reward = current_ep_reward
         print_running_reward += current_ep_reward
         print_running_episodes += 1
 
         log_running_reward += current_ep_reward
         log_running_episodes += 1
+        print(f"Episode {i_episode} reward: {round(current_ep_reward, 2)}")
 
         i_episode += 1
 
@@ -547,6 +554,8 @@ def part2():
     print("Started training at (GMT) : ", start_time)
     print("Finished training at (GMT) : ", end_time)
     print("Total training time  : ", end_time - start_time)
+    print("\nBest episode reward  : ", best_reward)
+    print("Best action sequence : ", best_action_sequence)
     print("============================================================================================")
 
     print("============================================================================================")
@@ -557,28 +566,13 @@ def part2():
 
 ################## hyperparameters ##################
 
-def part3():
+def part3(best=False, get_success=False):
     env_name = "SpacecraftEnv-v0"
     has_continuous_action_space = False
     max_ep_len = 400
     action_std = None
 
-    # env_name = "LunarLander-v2"
-    # has_continuous_action_space = False
-    # max_ep_len = 300
-    # action_std = None
-
-    # env_name = "BipedalWalker-v2"
-    # has_continuous_action_space = True
-    # max_ep_len = 1500           # max timesteps in one episode
-    # action_std = 0.1            # set same std for action distribution which was used while saving
-
-    # env_name = "RoboschoolWalker2d-v1"
-    # has_continuous_action_space = True
-    # max_ep_len = 1000           # max timesteps in one episode
-    # action_std = 0.1            # set same std for action distribution which was used while saving
-
-    total_test_episodes = 1  # total num of testing episodes
+    total_test_episodes = 100 if get_success else 1  # total num of testing episodes
 
     K_epochs = 80  # update policy for K epochs
     eps_clip = 0.2  # clip parameter for PPO
@@ -617,13 +611,14 @@ def part3():
     print("--------------------------------------------------------------------------------------------")
 
     test_running_reward = 0
+    best_action_sequence = []
 
     for ep in range(1, total_test_episodes + 1):
         ep_reward = 0
         state = env.reset()
 
         for t in range(1, max_ep_len + 1):
-            action = ppo_agent.select_action(state, best=True)
+            action = best_action_sequence[t] if best else ppo_agent.select_action(state)
             state, reward, done, _ = env.step(action)
             ep_reward += reward
 
@@ -635,7 +630,7 @@ def part3():
 
         test_running_reward += ep_reward
         print('Episode: {} \t\t Reward: {}'.format(ep, round(ep_reward, 2)))
-        ep_reward = 0
+        if ep_reward > 0: break
 
     env.render()
     env.close()
@@ -773,5 +768,5 @@ def part4():
 
 
 # part2()
-# part3()
-part4()
+part3(best=False, get_success=True)  # Select best action (as opposed to selecting from policy training distribution)
+# part4()
