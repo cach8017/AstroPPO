@@ -572,7 +572,7 @@ def part3(best=False, get_success=False):
     max_ep_len = 400
     action_std = None
 
-    total_test_episodes = 100 if get_success else 1  # total num of testing episodes
+    total_test_episodes = 100 if get_success and not best else 1  # total num of testing episodes
 
     K_epochs = 80  # update policy for K epochs
     eps_clip = 0.2  # clip parameter for PPO
@@ -611,14 +611,19 @@ def part3(best=False, get_success=False):
     print("--------------------------------------------------------------------------------------------")
 
     test_running_reward = 0
-    best_action_sequence = []
+    # best_action_sequence = []
+    best_action_sequence = [10, 4, 22, 21, 20, 21, 2, 22, 0, 8, 3, 4, 7, 13, 4, 18, 13, 20, 19, 20, 17, 9, 2, 6, 20, 16, 13, 12, 13, 0, 22, 9, 3, 20, 19, 14, 13, 13, 18, 13, 9, 13, 20, 9, 20, 21, 13, 13, 13, 13, 13, 7, 13, 3, 2, 9, 13, 13, 14, 13, 14, 14, 21, 0, 21, 13, 13, 21, 13, 16, 6, 13, 22, 4, 9, 13, 13, 2, 19, 13, 13, 15, 13, 14, 5, 20, 12, 21, 14, 19, 13, 20, 13, 13, 19, 13, 6, 14, 12, 14, 13, 21, 0, 12, 13, 6, 3, 16, 19, 3, 18, 14, 6, 11, 14, 20, 4, 20, 20, 13, 13, 3, 20, 19, 13, 18, 9, 13, 18, 13, 10, 12, 13, 14, 10, 17, 21, 13, 21, 13, 9, 6, 14, 15, 3, 13, 19, 1, 4, 4, 8, 21, 21, 17, 8, 6, 21, 6, 13, 19, 13, 14, 16, 23, 13, 13, 7, 2, 19, 6, 13, 2, 13, 20, 7, 13, 14, 2, 23, 16]
 
     for ep in range(1, total_test_episodes + 1):
         ep_reward = 0
         state = env.reset()
 
         for t in range(1, max_ep_len + 1):
-            action = best_action_sequence[t] if best else ppo_agent.select_action(state)
+            if best and t == len(best_action_sequence)+1:
+                break
+
+            action = best_action_sequence[t-1] if best else ppo_agent.select_action(state)
+            print(action)
             state, reward, done, _ = env.step(action)
             ep_reward += reward
 
@@ -767,6 +772,6 @@ def part4():
     plt.show()
 
 
-# part2()
-part3(best=False, get_success=True)  # Select best action (as opposed to selecting from policy training distribution)
+part2()
+# part3(best=True, get_success=True)  # Select best action (as opposed to selecting from policy training distribution)
 # part4()

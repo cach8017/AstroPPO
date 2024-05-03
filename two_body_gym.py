@@ -17,6 +17,8 @@ class SpacecraftEnv(Env):
         r_mag_final = self.earth_radius + 35786.0  # km
         v_mag = np.sqrt(self.earth_mu / r_mag)  # km/s
         v_mag_final = np.sqrt(self.earth_mu / r_mag_final)  # km/s
+        self.initial_orbit_radius = r_mag
+        self.final_orbit_radius = r_mag_final
 
         # initial position and velocity vectors
         r0 = np.array([r_mag, 0.0, 0.0])
@@ -157,6 +159,20 @@ class SpacecraftEnv(Env):
         i = np.arccos(h[2] / np.linalg.norm(h))
 
         return a, e, i
+    
+    def calculate_hohmann(self):
+        r1 = self.initial_orbit_radius
+        r2 = self.final_orbit_radius
+
+        delta_v1 = np.sqrt(self.earth_mu / r1) * (np.sqrt(2 * r2 / (r1 + r2)) - 1)
+        delta_v2 = np.sqrt(self.earth_mu / r2) * (1 - np.sqrt(2 * r1 / (r1 + r2)))
+
+        # Maybe you can use delta v ( v at start and end of orbit transfer to check how similar it is?)
+
+        a = (r1 + r2) / 2
+        e = (r2 - r1) / (r1 + r2)
+
+        return delta_v1, delta_v2, a, e
 
     def compare_orbits(self):
         # compare current and goal orbits
@@ -169,17 +185,66 @@ class SpacecraftEnv(Env):
         iDiff = abs(iTrue - i) / max(0.01, iTrue)
         # print(f"aDiff: {aDiff}\neDiff: {eDiff}\niDiff: {iDiff}")
 
-        aMatch = (aDiff < 0.1)
-        eMatch = (eDiff < 0.1)
+        aMatch = (aDiff < 0.01)
+        eMatch = (eDiff < 0.01)
+
+
+        delta_v1, delta_v2, a_h, e_h = self.calculate_hohmann()
+        aDiff_h = abs((a_h - a) / a_h)
+        eDiff_h = max(abs(e_h - e), 0.01)  
+
+        aMatch_h = (aDiff_h < 0.1)
+        eMatch_h = (eDiff_h < 0.1)
+
+
+
         # reward = 10/aDiff + min(100, 1/eDiff)  # incentive
         reward = 1
         done = False
+
+        '''
+        # Hohmann reference trajectory check
+        if aMatch_h and eMatch_h:
+            reward += 10
+            print("hohmann reached")
+        '''
+
         if aMatch and eMatch:
             reward += 2000
             done = True
             print("aMatched and eMatched")
         # reward = (aMatch + eMatch) * 500
         return reward, done
+    
+    '''
+    def compare_orbits(self):
+        # compare current and goal orbits
+        aTrue, eTrue, iTrue = self.get_orbital_elements(self.final_orbit)
+        a, e, i = self.get_orbital_elements()
+
+        # Calculate differences in orbital parameters
+        aDiff = abs(aTrue - a) / aTrue
+        eDiff = abs(eTrue - e)
+        iDiff = abs(iTrue - i)
+
+        # Intermediate rewards for getting closer to the target orbit
+        reward = 0
+        reward += max(0, 1 - aDiff) * 100  # Reward for semi-major axis
+        reward += max(0, 1 - eDiff) * 100  # Reward for eccentricity
+        reward += max(0, 1 - iDiff) * 100  # Reward for inclination
+
+        done = False
+        if aDiff < 0.05 and eDiff < 0.05 and iDiff < 0.05:
+            reward += 2000
+            done = True
+            print("Target orbit reached")
+
+        # Penalize for excessive fuel consumption
+        reward -= np.abs(self.state[3:6]).sum() * 10
+
+        return reward, done
+
+    '''
 
 
 # Example usage
